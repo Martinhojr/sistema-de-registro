@@ -1,20 +1,31 @@
 <?php
-// Configuração dinâmica da base de dados (Railway + Local)
-$host     = getenv('MYSQLHOST') ?: 'localhost';
-$port     = getenv('MYSQLPORT') ?: '3306';
-$dbname   = getenv('MYSQLDATABASE') ?: 'sistema_registo_cidadao';
-$username = getenv('MYSQLUSER') ?: 'root';
-$password = getenv('MYSQLPASSWORD') ?: '';
+// Se existir o link público completo da Railway, usamos ele. Caso contrário, monta o PDO normal.
+$db_url = getenv('MYSQL_PUBLIC_URL');
 
 try {
-    // Monta o DSN incluindo a porta dinâmica necessária para a nuvem
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
-    $pdo = new PDO($dsn, $username, $password);
+    if ($db_url) {
+        // Extrai os dados automaticamente do link público da Railway
+        $url = parse_url($db_url);
+        $host     = $url["host"];
+        $port     = $url["port"];
+        $username = $url["user"];
+        $password = $url["pass"];
+        $dbname   = substr($url["path"], 1);
+    } else {
+        // Teu plano B para rodar no teu PC local
+        $host     = 'localhost';
+        $dbname   = 'sistema_registo_cidadao';
+        $username = 'root';
+        $password = '';
+        $port     = '3306';
+    }
+
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
 } catch(PDOException $e) {
     die("Erro na ligação à base de dados: " . $e->getMessage());
 }
-
 // Função para validar BI (formato simples)
 function validarBI($numero_bi) {
     // Formato esperado: 9 dígitos + 2 letras + 3 dígitos (ex: 001234567LA045)
