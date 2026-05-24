@@ -1,39 +1,41 @@
 <?php
-// 1. Permitir que o Ionic (localhost:8100) acesse a API
+// 1. Configuração de CORS e Cabeçalhos HTTP (Unificados e limpos)
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Content-Type: application/json; charset=UTF-8");
 
-// 2. Responder às requisições "preflight" (OPTIONS) que o browser faz automaticamente
+// 2. Responder às requisições "preflight" (OPTIONS) que o Ionic/Browser faz automaticamente
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-
 // api_cidadao.php - API de consulta de cidadão por BI
 // Uso: http://seudominio.com/api_cidadao.php?bi=001234567LA045
 
-// Configuração de CORS para permitir acesso de outros domínios (caso necessário)
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json; charset=UTF-8");
-
-// Incluir configuração da base de dados (reutilizando o mesmo ficheiro)
-// config.php - Configuração da base de dados
-$host = 'localhost';
-$dbname = 'sistema_registo_cidadao';
-$username = 'root';      // Altere conforme seu ambiente
-$password = '';          // Altere conforme seu ambiente
+// 3. Configuração Dinâmica da Base de Dados (Compatível com Local e Railway)
+$host     = getenv('MYSQLHOST') ?: 'localhost';
+$dbname   = getenv('MYSQLDATABASE') ?: 'sistema_registo_cidadao';
+$username = getenv('MYSQLUSER') ?: 'root';
+$password = getenv('MYSQLPASSWORD') ?: ''; // No ambiente local costuma ser vazio
+$port     = getenv('MYSQLPORT') ?: '3306';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    // Incluída a variável de porta caso a Railway mude a porta padrão
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
-    die("Erro na ligação à base de dados: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'erro',
+        'codigo' => 500,
+        'mensagem' => 'Erro na ligação à base de dados.'
+    ]);
+    exit;
 }
-// Função para validar formato do BI (mesma do sistema de registo)
+
+// Função para validar formato do BI
 function validarBI($numero_bi) {
     return preg_match('/^\d{9}[A-Z]{2}\d{3}$/', $numero_bi);
 }
@@ -53,7 +55,7 @@ function formatarDadosCidadao($cidadao) {
             ],
             'nome_completo' => $cidadao['nome_completo'],
             'data_nascimento' => $cidadao['data_nascimento'],
-            'idade' => calcularIdade($cidadao['data_nascimento']),
+            'id_ade' => calcularIdade($cidadao['data_nascimento']),
             'genero' => $cidadao['genero'],
             'naturalidade' => $cidadao['naturalidade'],
             'filiacao' => [
@@ -149,7 +151,7 @@ try {
     }
     
 } catch (PDOException $e) {
-    // Erro interno do servidor (ex: base de dados fora do ar)
+    // Erro interno do servidor
     http_response_code(500); // Internal Server Error
     echo json_encode([
         'status' => 'erro',
@@ -157,7 +159,7 @@ try {
         'mensagem' => 'Erro interno no servidor. Tente novamente mais tarde.'
     ]);
     
-    // Log do erro (opcional, para depuração)
+    // Log do erro para monitorização
     error_log("API Cidadão - Erro BD: " . $e->getMessage());
 }
 ?>
