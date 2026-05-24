@@ -15,24 +15,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 // Uso: http://seudominio.com/api_cidadao.php?bi=001234567LA045
 
 // 3. Configuração Dinâmica da Base de Dados (Compatível com Local e Railway)
-$host     = getenv('MYSQLHOST') ?: 'localhost';
-$dbname   = getenv('MYSQLDATABASE') ?: 'sistema_registo_cidadao';
-$username = getenv('MYSQLUSER') ?: 'root';
-$password = getenv('MYSQLPASSWORD') ?: ''; // No ambiente local costuma ser vazio
-$port     = getenv('MYSQLPORT') ?: '3306';
+$db_url = getenv('MYSQL_PUBLIC_URL');
 
 try {
-    // Incluída a variável de porta caso a Railway mude a porta padrão
+    if ($db_url) {
+        // Extrai os dados automaticamente do link público da Railway
+        $url = parse_url($db_url);
+        $host     = $url["host"];
+        $port     = $url["port"];
+        $username = $url["user"];
+        $password = $url["pass"];
+        $dbname   = substr($url["path"], 1);
+    } else {
+        // Teu plano B para rodar no teu PC local
+        $host     = 'localhost';
+        $dbname   = 'sistema_registo_cidadao';
+        $username = 'root';
+        $password = '';
+        $port     = '3306';
+    }
+
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
 } catch(PDOException $e) {
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'erro',
-        'codigo' => 500,
-        'mensagem' => 'Erro na ligação à base de dados.'
-    ]);
-    exit;
+    die("Erro na ligação à base de dados: " . $e->getMessage());
 }
 
 // Função para validar formato do BI
