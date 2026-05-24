@@ -1,12 +1,15 @@
 <?php
-// config.php - Configuração da base de dados
-$host = 'localhost';
-$dbname = 'sistema_registo_cidadao';
-$username = 'root';      // Altere conforme seu ambiente
-$password = '';          // Altere conforme seu ambiente
+// Configuração dinâmica da base de dados (Railway + Local)
+$host     = getenv('MYSQLHOST') ?: 'localhost';
+$port     = getenv('MYSQLPORT') ?: '3306';
+$dbname   = getenv('MYSQLDATABASE') ?: 'sistema_registo_cidadao';
+$username = getenv('MYSQLUSER') ?: 'root';
+$password = getenv('MYSQLPASSWORD') ?: '';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    // Monta o DSN incluindo a porta dinâmica necessária para a nuvem
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
+    $pdo = new PDO($dsn, $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
     die("Erro na ligação à base de dados: " . $e->getMessage());
@@ -87,9 +90,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registo Nacional · Cidadão Angolano</title>
-    <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -442,7 +443,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body>
     <div class="dashboard">
-        <!-- Header -->
         <div class="header">
             <div class="logo-area">
                 <div class="logo-icon">
@@ -460,7 +460,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-        <!-- Mensagem de feedback -->
         <?php if ($mensagem): ?>
         <div class="mensagem <?= $tipo_mensagem ?>">
             <i class="fas <?= $tipo_mensagem === 'sucesso' ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
@@ -468,9 +467,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <?php endif; ?>
 
-        <!-- Grid principal: formulário e últimos registos -->
         <div class="grid">
-            <!-- Formulário de registo -->
             <div class="form-card">
                 <div class="card-title">
                     <i class="fas fa-pen-alt"></i> Novo registo de cidadão
@@ -481,7 +478,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 <form method="POST" action="">
                     <div class="form-grid">
-                        <!-- BI e dados do documento -->
                         <div class="input-group">
                             <label><i class="fas fa-qrcode"></i> Nº do BI *</label>
                             <input type="text" name="numero_bi" placeholder="001234567LA045" required pattern="\d{9}[A-Z]{2}\d{3}" title="9 dígitos + 2 letras + 3 dígitos">
@@ -499,7 +495,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <input type="text" name="arquivo_identificacao" placeholder="001234567 LA 045" required>
                         </div>
 
-                        <!-- Dados pessoais -->
                         <div class="full-width input-group">
                             <label><i class="fas fa-user"></i> Nome completo *</label>
                             <input type="text" name="nome_completo" placeholder="Nome completo conforme BI" required>
@@ -530,7 +525,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <input type="text" name="mae_nome" placeholder="Nome completo">
                         </div>
 
-                        <!-- Morada -->
                         <div class="full-width input-group">
                             <label><i class="fas fa-map-marker-alt"></i> Endereço *</label>
                             <textarea name="endereco" placeholder="Rua/Avenida, número, etc" required></textarea>
@@ -570,7 +564,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </select>
                         </div>
 
-                        <!-- Contactos -->
                         <div class="input-group">
                             <label><i class="fas fa-phone-alt"></i> Telefone</label>
                             <input type="tel" name="telefone" placeholder="+244 923 456 789">
@@ -580,7 +573,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <input type="email" name="email" placeholder="exemplo@email.com">
                         </div>
 
-                        <!-- Estado civil / profissão / dados biométricos -->
                         <div class="input-group">
                             <label><i class="fas fa-heart"></i> Estado civil</label>
                             <select name="estado_civil">
@@ -611,7 +603,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </form>
             </div>
 
-            <!-- Cidadãos recentes -->
             <div class="recent-card">
                 <div class="recent-header">
                     <h3><i class="fas fa-clock"></i> Últimos registos</h3>
@@ -655,7 +646,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-        <!-- Pequenas estatísticas (inspiradas no dashboard anterior) -->
         <div class="stats-row">
             <div class="stat-mini">
                 <i class="fas fa-users"></i>
