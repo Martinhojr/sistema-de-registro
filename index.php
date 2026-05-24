@@ -1,4 +1,10 @@
 <?php
+session_start();
+if (!isset($_SESSION['admin_logado'])) {
+    header('Location: login.php');
+    exit;
+}
+
 // Se existir o link público completo da Railway, usamos ele. Caso contrário, monta o PDO normal.
 $db_url = getenv('MYSQL_PUBLIC_URL');
 
@@ -26,6 +32,7 @@ try {
 } catch(PDOException $e) {
     die("Erro na ligação à base de dados: " . $e->getMessage());
 }
+
 // Função para validar BI (formato simples)
 function validarBI($numero_bi) {
     // Formato esperado: 9 dígitos + 2 letras + 3 dígitos (ex: 001234567LA045)
@@ -94,6 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Listar cidadãos (para a tabela)
 $stmt = $pdo->query("SELECT id, nome_completo, numero_bi, provincia, data_nascimento, telefone, email FROM cidadaos ORDER BY id DESC LIMIT 10");
 $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Obter a contagem real total para o painel inferior
+$total_registos = $pdo->query("SELECT COUNT(*) FROM cidadaos")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -104,361 +114,73 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #f0f3f8;
-            color: #1e293b;
-            line-height: 1.5;
-            padding: 24px;
-        }
-
-        .dashboard {
-            max-width: 1440px;
-            margin: 0 auto;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f0f3f8; color: #1e293b; line-height: 1.5; padding: 24px; }
+        .dashboard { max-width: 1440px; margin: 0 auto; }
+        
         /* Header estilo Plutus */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 32px;
-        }
-
-        .logo-area {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .logo-icon {
-            background: linear-gradient(135deg, #6c5ce7, #a594fd);
-            width: 48px;
-            height: 48px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            box-shadow: 0 12px 22px -10px #6c5ce7;
-        }
-
-        .logo-text h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        .logo-text p {
-            color: #64748b;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .user-badge {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            background: white;
-            padding: 8px 20px 8px 16px;
-            border-radius: 60px;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.02);
-        }
-
-        .user-badge i {
-            color: #6c5ce7;
-            font-size: 20px;
-        }
-
-        .user-badge .avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(145deg, #6c5ce7, #8f7dfc);
-            border-radius: 50%;
-        }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .logo-area { display: flex; align-items: center; gap: 12px; }
+        .logo-icon { background: linear-gradient(135deg, #6c5ce7, #a594fd); width: 48px; height: 48px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; box-shadow: 0 12px 22px -10px #6c5ce7; }
+        .logo-text h1 { font-size: 24px; font-weight: 700; color: #0f172a; }
+        .logo-text p { color: #64748b; font-size: 14px; font-weight: 500; }
+        
+        .user-badge { display: flex; align-items: center; gap: 15px; background: white; padding: 8px 20px; border-radius: 60px; box-shadow: 0 6px 18px rgba(0,0,0,0.02); }
+        .user-badge i.fa-bell { color: #64748b; font-size: 18px; cursor: pointer; }
+        .user-badge .admin-wrapper { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; font-size: 14px; }
+        .user-badge .avatar { width: 32px; height: 32px; background: linear-gradient(145deg, #6c5ce7, #8f7dfc); border-radius: 50%; }
+        .btn-logout { background: #fee2e2; color: #ef4444; text-decoration: none; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; }
+        .btn-logout:hover { background: #fecaca; }
 
         /* Grid principal */
-        .grid {
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 24px;
-            margin-bottom: 30px;
-        }
+        .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; margin-bottom: 30px; }
+        .form-card { background: white; border-radius: 32px; padding: 28px; box-shadow: 0 20px 35px -10px rgba(0,0,0,0.03); border: 1px solid #ffffff50; }
+        .card-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+        .card-title i { color: #6c5ce7; background: #edeaff; padding: 10px; border-radius: 18px; }
+        .card-sub { color: #64748b; font-size: 14px; margin-bottom: 28px; border-left: 3px solid #6c5ce7; padding-left: 16px; background: #f8fafd; border-radius: 0 12px 12px 0; line-height: 1.4; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .full-width { grid-column: span 2; }
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+        .input-group label { font-weight: 600; font-size: 13px; color: #475569; display: flex; align-items: center; gap: 4px; }
+        .input-group label i { color: #6c5ce7; font-size: 13px; }
+        .input-group input, .input-group select, .input-group textarea { padding: 14px 18px; border: 2px solid #e9edf5; border-radius: 22px; font-size: 15px; transition: 0.2s; background: #ffffff; font-family: 'Inter', sans-serif; }
+        .input-group input:focus, .input-group select:focus, .input-group textarea:focus { border-color: #6c5ce7; outline: none; box-shadow: 0 0 0 4px #e1daff; }
+        .input-group textarea { resize: vertical; min-height: 90px; }
+        
+        .btn-submit { background: #6c5ce7; color: white; border: none; padding: 16px 28px; border-radius: 40px; font-weight: 700; font-size: 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 12px; transition: 0.2s; box-shadow: 0 12px 22px -10px #6c5ce7; width: 100%; margin-top: 16px; }
+        .btn-submit:hover { background: #5b4bc4; transform: scale(0.98); }
 
-        /* Card de formulário */
-        .form-card {
-            background: white;
-            border-radius: 32px;
-            padding: 28px;
-            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.03);
-            border: 1px solid #ffffff50;
-        }
+        .mensagem { padding: 16px 22px; border-radius: 40px; margin-bottom: 24px; font-weight: 500; display: flex; align-items: center; gap: 12px; }
+        .sucesso { background: #e6faf5; color: #0d7c5a; border-left: 5px solid #2cc197; }
+        .erro { background: #fff1f0; color: #b34033; border-left: 5px solid #f07b7b; }
 
-        .card-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        /* Tabela */
+        .recent-card { background: white; border-radius: 32px; padding: 28px; box-shadow: 0 20px 35px -10px rgba(0,0,0,0.03); }
+        .recent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .recent-header h3 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .badge { background: #f0f2fa; padding: 4px 12px; border-radius: 40px; font-size: 13px; font-weight: 600; color: #3f4a6b; }
+        .tabela-cidadaos { width: 100%; border-collapse: collapse; }
+        .tabela-cidadaos th { text-align: left; padding: 12px 8px; color: #718096; font-weight: 600; font-size: 12px; border-bottom: 2px solid #edf2f7; }
+        .tabela-cidadaos td { padding: 16px 8px; border-bottom: 1px solid #f0f4fa; font-size: 14px; }
+        .tabela-cidadaos tr:hover td { background-color: #f9faff; }
+        .id-chip { background: #6c5ce7; color: white; font-weight: 600; padding: 4px 12px; border-radius: 30px; font-size: 12px; display: inline-block; }
+        .contact-info { display: flex; flex-direction: column; gap: 2px; }
+        .contact-info small { color: #94a3b8; font-size: 11px; }
+        .provincia-tag { background: #e6e9ff; color: #463aa7; padding: 4px 12px; border-radius: 40px; font-weight: 500; font-size: 12px; display: inline-block; }
 
-        .card-title i {
-            color: #6c5ce7;
-            background: #edeaff;
-            padding: 10px;
-            border-radius: 18px;
-        }
-
-        .card-sub {
-            color: #64748b;
-            font-size: 14px;
-            margin-bottom: 28px;
-            border-left: 3px solid #6c5ce7;
-            padding-left: 16px;
-            background: #f8fafd;
-            border-radius: 0 12px 12px 0;
-            line-height: 1.4;
-        }
-
-        /* Formulário */
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-        }
-
-        .full-width {
-            grid-column: span 2;
-        }
-
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .input-group label {
-            font-weight: 600;
-            font-size: 13px;
-            color: #475569;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .input-group label i {
-            color: #6c5ce7;
-            font-size: 13px;
-        }
-
-        .input-group input,
-        .input-group select,
-        .input-group textarea {
-            padding: 14px 18px;
-            border: 2px solid #e9edf5;
-            border-radius: 22px;
-            font-size: 15px;
-            transition: 0.2s;
-            background: #ffffff;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .input-group input:focus,
-        .input-group select:focus,
-        .input-group textarea:focus {
-            border-color: #6c5ce7;
-            outline: none;
-            box-shadow: 0 0 0 4px #e1daff;
-        }
-
-        .input-group textarea {
-            resize: vertical;
-            min-height: 90px;
-        }
-
-        .btn-submit {
-            background: #6c5ce7;
-            color: white;
-            border: none;
-            padding: 16px 28px;
-            border-radius: 40px;
-            font-weight: 700;
-            font-size: 16px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            transition: 0.2s;
-            box-shadow: 0 12px 22px -10px #6c5ce7;
-            width: 100%;
-            margin-top: 16px;
-        }
-
-        .btn-submit:hover {
-            background: #5b4bc4;
-            transform: scale(0.98);
-        }
-
-        .mensagem {
-            padding: 16px 22px;
-            border-radius: 40px;
-            margin-bottom: 24px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .sucesso {
-            background: #e6faf5;
-            color: #0d7c5a;
-            border-left: 5px solid #2cc197;
-        }
-
-        .erro {
-            background: #fff1f0;
-            color: #b34033;
-            border-left: 5px solid #f07b7b;
-        }
-
-        /* Card de cidadãos recentes */
-        .recent-card {
-            background: white;
-            border-radius: 32px;
-            padding: 28px;
-            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.03);
-        }
-
-        .recent-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .recent-header h3 {
-            font-size: 20px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .badge {
-            background: #f0f2fa;
-            padding: 4px 12px;
-            border-radius: 40px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #3f4a6b;
-        }
-
-        .tabela-cidadaos {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .tabela-cidadaos th {
-            text-align: left;
-            padding: 12px 8px;
-            color: #718096;
-            font-weight: 600;
-            font-size: 12px;
-            border-bottom: 2px solid #edf2f7;
-        }
-
-        .tabela-cidadaos td {
-            padding: 16px 8px;
-            border-bottom: 1px solid #f0f4fa;
-            font-size: 14px;
-        }
-
-        .tabela-cidadaos tr:hover td {
-            background-color: #f9faff;
-        }
-
-        .id-chip {
-            background: #6c5ce7;
-            color: white;
-            font-weight: 600;
-            padding: 4px 12px;
-            border-radius: 30px;
-            font-size: 12px;
-            display: inline-block;
-        }
-
-        .contact-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .contact-info small {
-            color: #94a3b8;
-            font-size: 11px;
-        }
-
-        .provincia-tag {
-            background: #e6e9ff;
-            color: #463aa7;
-            padding: 4px 12px;
-            border-radius: 40px;
-            font-weight: 500;
-            font-size: 12px;
-            display: inline-block;
-        }
-
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-top: 24px;
-        }
-
-        .stat-mini {
-            background: white;
-            padding: 18px 20px;
-            border-radius: 26px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 8px 22px -12px rgba(0,0,0,0.04);
-        }
-
-        .stat-mini i {
-            font-size: 32px;
-            color: #6c5ce7;
-            background: #f1efff;
-            padding: 12px;
-            border-radius: 20px;
-        }
-
-        .stat-mini div p:first-child {
-            font-weight: 600;
-            font-size: 18px;
-        }
-        .stat-mini div p:last-child {
-            color: #6f7c98;
-            font-size: 13px;
-        }
+        /* Estatísticas */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 24px; }
+        .stat-mini { background: white; padding: 18px 20px; border-radius: 26px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 22px -12px rgba(0,0,0,0.04); }
+        .stat-mini i { font-size: 32px; color: #6c5ce7; background: #f1efff; padding: 12px; border-radius: 20px; }
+        .stat-mini div p:first-child { font-weight: 600; font-size: 18px; }
+        .stat-mini div p:last-child { color: #6f7c98; font-size: 13px; }
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="header">
             <div class="logo-area">
-                <div class="logo-icon">
-                    <i class="fas fa-id-card"></i>
-                </div>
+                <div class="logo-icon"><i class="fas fa-id-card"></i></div>
                 <div class="logo-text">
                     <h1>Registo Nacional</h1>
                     <p>Base de dados do cidadão angolano · BI</p>
@@ -466,8 +188,11 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <div class="user-badge">
                 <i class="fas fa-bell"></i>
-                <span>Admin</span>
-                <div class="avatar"></div>
+                <div class="admin-wrapper">
+                    <div class="avatar"></div>
+                    <span><?= htmlspecialchars($_SESSION['admin_user']) ?></span>
+                </div>
+                <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Sair</a>
             </div>
         </div>
 
@@ -491,7 +216,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="form-grid">
                         <div class="input-group">
                             <label><i class="fas fa-qrcode"></i> Nº do BI *</label>
-                            <input type="text" name="numero_bi" placeholder="001234567LA045" required pattern="\d{9}[A-Z]{2}\d{3}" title="9 dígitos + 2 letras + 3 dígitos">
+                            <input type="text" name="numero_bi" placeholder="001234567LA045" required pattern="\d{9}[A-Za-z]{2}\d{3}" title="9 dígitos + 2 letras + 3 dígitos">
                         </div>
                         <div class="input-group">
                             <label><i class="fas fa-calendar"></i> Data emissão *</label>
@@ -571,7 +296,6 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <option value="Cunene">Cunene</option>
                                 <option value="Huíla">Huíla</option>
                                 <option value="Moxico">Moxico</option>
-                                <option value="Cuando">Cuando</option>
                             </select>
                         </div>
 
@@ -631,7 +355,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <tbody>
                         <?php foreach ($cidadaos as $c): ?>
                         <tr>
-                            <td><span class="id-chip">#<?= $c['id'] ?></span></td>
+                            <td><span class="id-chip">#<?= htmlspecialchars($c['id']) ?></span></td>
                             <td>
                                 <strong><?= htmlspecialchars($c['nome_completo']) ?></strong><br>
                                 <small style="color:#6c5ce7;"><?= htmlspecialchars($c['numero_bi']) ?></small>
@@ -661,7 +385,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="stat-mini">
                 <i class="fas fa-users"></i>
                 <div>
-                    <p><?= count($cidadaos) ?>+</p>
+                    <p><?= htmlspecialchars($total_registos) ?></p>
                     <p>Cidadãos registados</p>
                 </div>
             </div>
@@ -683,7 +407,7 @@ $cidadaos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <i class="fas fa-shield-alt"></i>
                 <div>
                     <p>seguro</p>
-                    <p>LGPD / protecção</p>
+                    <p>Base Protegida</p>
                 </div>
             </div>
         </div>
